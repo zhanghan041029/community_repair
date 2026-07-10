@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhan.backdemo.mapper.EvaluationMapper">
+
+    <resultMap id="EvaluationMap" type="com.zhan.backdemo.entity.Evaluation">
+        <id property="id" column="id"/>
+        <result property="repairId" column="repair_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="score" column="score"/>
+        <result property="comment" column="comment"/>
+        <result property="reply" column="reply"/>
+        <result property="replyTime" column="reply_time"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO evaluation (repair_id, user_id, score, comment)
+        VALUES (#{repairId}, #{userId}, #{score}, #{comment})
+    </insert>
+
+    <select id="findByRepairId" resultMap="EvaluationMap">
+        SELECT * FROM evaluation WHERE repair_id = #{repairId}
+    </select>
+
+    <select id="findVoByRepairId" resultType="com.zhan.backdemo.vo.EvaluationVO">
+        SELECT
+            e.id,
+            e.repair_id AS repairId,
+            e.user_id AS userId,
+            u.name AS userName,
+            e.score,
+            e.comment,
+            e.reply,
+            e.reply_time AS replyTime,
+            e.create_time AS createTime
+        FROM evaluation e
+        LEFT JOIN sys_user u ON e.user_id = u.id
+        WHERE e.repair_id = #{repairId}
+    </select>
+
+    <select id="countByUserId" resultType="long">
+        SELECT COUNT(*)
+        FROM evaluation e
+        WHERE e.user_id = #{userId}
+    </select>
+
+    <select id="listByUserId" resultType="com.zhan.backdemo.vo.EvaluationVO">
+        SELECT
+            e.id,
+            e.repair_id AS repairId,
+            e.user_id AS userId,
+            u.name AS userName,
+            e.score,
+            e.comment,
+            e.reply,
+            e.reply_time AS replyTime,
+            e.create_time AS createTime,
+            r.title AS repairTitle
+        FROM evaluation e
+        LEFT JOIN sys_user u ON e.user_id = u.id
+        LEFT JOIN repair_order r ON e.repair_id = r.id
+        WHERE e.user_id = #{userId}
+        ORDER BY e.create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="findById" resultMap="EvaluationMap">
+        SELECT * FROM evaluation WHERE id = #{id}
+    </select>
+
+    <update id="updateReply">
+        UPDATE evaluation
+        SET reply = #{reply}, reply_time = #{replyTime}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

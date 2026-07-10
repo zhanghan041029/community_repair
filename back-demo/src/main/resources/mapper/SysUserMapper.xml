@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhan.backdemo.mapper.SysUserMapper">
+
+    <resultMap id="SysUserMap" type="com.zhan.backdemo.entity.SysUser">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="name" column="name"/>
+        <result property="phone" column="phone"/>
+        <result property="role" column="role"/>
+        <result property="address" column="address"/>
+        <result property="skill" column="skill"/>
+        <result property="avatar" column="avatar"/>
+        <result property="status" column="status"/>
+        <result property="registerType" column="register_type"/>
+        <result property="rejectReason" column="reject_reason"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="findByUsername" resultMap="SysUserMap">
+        SELECT * FROM sys_user WHERE username = #{username}
+    </select>
+
+    <select id="findById" resultMap="SysUserMap">
+        SELECT * FROM sys_user WHERE id = #{id}
+    </select>
+
+    <select id="findByPhone" resultMap="SysUserMap">
+        SELECT * FROM sys_user WHERE phone = #{phone}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_user (username, password, name, phone, role, address, skill, avatar, status, register_type, reject_reason)
+        VALUES (#{username}, #{password}, #{name}, #{phone}, #{role}, #{address}, #{skill}, #{avatar}, #{status}, #{registerType}, #{rejectReason})
+    </insert>
+
+    <update id="update">
+        UPDATE sys_user
+        <set>
+            <if test="password != null">password = #{password},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="skill != null">skill = #{skill},</if>
+            <if test="avatar != null">avatar = #{avatar},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="rejectReason != null">reject_reason = #{rejectReason},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM sys_user WHERE id = #{id}
+    </delete>
+
+    <select id="countResidents" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_user
+        WHERE role = 'resident'
+        <if test="name != null and name != ''">
+            AND name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="phone != null and phone != ''">
+            AND phone LIKE CONCAT('%', #{phone}, '%')
+        </if>
+    </select>
+
+    <select id="listResidents" resultType="com.zhan.backdemo.vo.ResidentListVO">
+        SELECT
+            id,
+            name,
+            phone,
+            avatar,
+            address,
+            create_time AS createTime
+        FROM sys_user
+        WHERE role = 'resident'
+        <if test="name != null and name != ''">
+            AND name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="phone != null and phone != ''">
+            AND phone LIKE CONCAT('%', #{phone}, '%')
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countWorkers" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_user
+        WHERE role = 'worker'
+        <if test="name != null and name != ''">
+            AND name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="phone != null and phone != ''">
+            AND phone LIKE CONCAT('%', #{phone}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <select id="listWorkers" resultType="com.zhan.backdemo.vo.WorkerListVO">
+        SELECT
+            u.id,
+            u.name,
+            u.phone,
+            u.skill,
+            u.avatar,
+            u.status,
+            u.register_type AS registerType,
+            (SELECT COUNT(*) FROM repair_order r WHERE r.worker_id = u.id AND r.status = 'completed') AS workCount,
+            (SELECT AVG(e.score) FROM evaluation e
+             INNER JOIN repair_order ro ON e.repair_id = ro.id
+             WHERE ro.worker_id = u.id AND ro.status = 'completed') AS avgScore
+        FROM sys_user u
+        WHERE u.role = 'worker'
+        <if test="name != null and name != ''">
+            AND u.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="phone != null and phone != ''">
+            AND u.phone LIKE CONCAT('%', #{phone}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND u.status = #{status}
+        </if>
+        ORDER BY u.create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="listByRole" resultMap="SysUserMap">
+        SELECT * FROM sys_user WHERE role = #{role}
+    </select>
+
+    <select id="listActiveWorkers" resultMap="SysUserMap">
+        SELECT * FROM sys_user WHERE role = 'worker' AND status = 'active'
+    </select>
+
+</mapper>

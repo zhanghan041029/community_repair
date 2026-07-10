@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: back-demo
+  datasource:
+    url: jdbc:mysql://localhost:3306/community_repair?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: '123456'
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    date-format: "yyyy-MM-dd'T'HH:mm:ss"
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 10MB
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+
+jwt:
+  secret: community_repair_jwt_secret_key_2026_springboot_project
+  expiration: 7200000

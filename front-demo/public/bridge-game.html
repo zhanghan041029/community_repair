@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小人过桥</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    font-family: 'Segoe UI', sans-serif; user-select: none; overflow: hidden;
+  }
+  .game-wrapper {
+    position: relative; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  canvas { display: block; background: #e8f4f8; }
+  .tip {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    color: #555; font-size: 14px; pointer-events: none; text-align: center;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 0.5; } 50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="game-wrapper">
+  <canvas id="game"></canvas>
+  <div class="tip" id="tip">按住屏幕 / 空格键 搭桥，松开放下</div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const tip = document.getElementById('tip');
+
+const W = 600, H = 700;
+canvas.width = W; canvas.height = H;
+
+// ----- 游戏状态 -----
+const STATE = { READY: 0, EXTENDING: 1, DROPPING: 2, WALKING: 3, FALLING: 4, GAMEOVER: 5 };
+let state = STATE.READY;
+let score = 0, bestScore = 0;
+let extendSpeed = 320;    // 杆子伸长速度
+let stickLen = 0;         // 当前杆子长度
+let stickAngle = 0;       // 杆子倒下角度
+let heroX, heroY;         // 小人坐标
+let heroWalkDir = 1;      // 走路方向
+let walkProgress = 0;     // 走路进度 0~1
+let fallY = 0, fallVY = 0;
+
+// ----- 平台系统 -----
+let platforms = [];
+const PLAT_W = 80, PLAT_H = 20;
+
+function resetPlatforms() {
+  platforms = [
+    { x: 80, y: 500, w: PLAT_W },   // 起点
+    { x: 80 + 100 + Math.random() * 200, y: 500, w: PLAT_W },  // 第一个目标
+  ];
+}
+
+// 生成下一个平台
+function nextPlatform() {
+  const last = platforms[platforms.length - 1];
+  const gap = 80 + Math.random() * 180; // 间距 80~260
+  return { x: last.x + gap, y: last.y, w: PLAT_W };
+}
+
+// ----- 小人 -----
+let hero = { x: 0, y: 0 };
+
+function placeHeroOnPlatform(idx) {
+  const p = platforms[idx];
+  hero.x = p.x + p.w - 26;
+  hero.y = p.y;
+}
+
+// ----- 输入处理 -----
+let pressing = false;
+
+function onPress() {
+  if (state === STATE.GAMEOVER) { restart(); return; }
+  if (state === STATE.READY)     { state = STATE.EXTENDING; stickLen = 0; tip.style.display = 'none'; }
+}
+
+function onRelease() {
+  if (state !== STATE.EXTENDING) return;
+  state = STATE.DROPPING;
+  stickAngle = 0;
+}
+
+canvas.addEventListener('mousedown', onPress);
+canvas.addEventListener('mouseup', onRelease);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onPress(); });
+canvas.addEventListener('touchend', e => { e.preventDefault(); onRelease(); });
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); if (!pressing) onPress(); pressing = true; }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') { e.preventDefault(); pressing = false; onRelease(); }
+});
+
+// ----- 绘图 -----
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#87CEEB'); grad.addColorStop(1, '#e0f0e8');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  // 云
+  function cloud(cx, cy, s) {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(cx, cy, 20*s, 0, Math.PI*2);
+    ctx.arc(cx+22*s, cy-8*s, 16*s, 0, Math.PI*2);
+    ctx.arc(cx+44*s, cy, 20*s, 0, Math.PI*2);
+    ctx.arc(cx+15*s, cy+5*s, 18*s, 0, Math.PI*2);
+    ctx.arc(cx+30*s, cy+4*s, 14*s, 0, Math.PI*2);
+    ctx.fill();
+  }
+  cloud(100, 80, 1); cloud(400, 60, 0.8); cloud(280, 110, 0.9);
+}
+
+function drawPlatform(p, topGradient = false) {
+  // 柱子
+  ctx.fillStyle = '#8B7355';
+  ctx.fillRect(p.x + 5, p.y, 12, H - p.y);
+  ctx.fillRect(p.x + p.w - 17, p.y, 12, H - p.y);
+
+  // 横板
+  const grad = ctx.createLinearGradient(0, p.y, 0, p.y + PLAT_H);
+  if (topGradient) {
+    grad.addColorStop(0, '#FFD700'); grad.addColorStop(1, '#FF8C00');
+  } else {
+    grad.addColorStop(0, '#DEB887'); grad.addColorStop(1, '#A0522D');
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(p.x, p.y, p.w, PLAT_H);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillRect(p.x, p.y, p.w, 4);
+  ctx.strokeStyle = '#8B6914'; ctx.lineWidth = 1;
+  ctx.strokeRect(p.x, p.y, p.w, PLAT_H);
+}
+
+function drawStick(fromX, fromY, len, angle) {
+  ctx.save();
+  ctx.translate(fromX, fromY);
+  ctx.rotate(angle);
+  ctx.fillStyle = '#E74C3C';
+  ctx.fillRect(0, -3, len, 6);
+  ctx.fillStyle = '#C0392B';
+  ctx.fillRect(0, -2, len, 2);
+  ctx.restore();
+}
+
+function drawHero(x, y, tint = '#3498DB') {
+  const hx = x, hy = y;
+  // 身体
+  ctx.fillStyle = tint;
+  ctx.beginPath();
+  ctx.arc(hx, hy - 38, 12, 0, Math.PI * 2);
+  ctx.fill();
+  // 眼睛
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(hx - 4, hy - 42, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx + 4, hy - 42, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(hx - 3, hy - 41, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx + 5, hy - 41, 2, 0, Math.PI * 2); ctx.fill();
+  // 嘴巴
+  ctx.strokeStyle = '#E74C3C'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(hx + 1, hy - 34, 4, 0.1, Math.PI - 0.1); ctx.stroke();
+  // 身体
+  ctx.fillStyle = tint;
+  ctx.fillRect(hx - 8, hy - 26, 16, 20);
+  // 腿
+  ctx.fillStyle = '#2C3E50';
+  ctx.fillRect(hx - 8, hy - 6, 6, 8);
+  ctx.fillRect(hx + 2, hy - 6, 6, 8);
+  // 鞋
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(hx - 9, hy + 2, 8, 4);
+  ctx.fillRect(hx + 1, hy + 2, 8, 4);
+}
+
+function drawScore() {
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(W - 150, 10, 135, 40);
+  ctx.font = 'bold 18px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'right';
+  ctx.fillText(`得分: ${score}`, W - 20, 38);
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 40px "Segoe UI", sans-serif';
+  ctx.fillText('游戏结束', W/2, H/2 - 50);
+  ctx.font = '24px "Segoe UI", sans-serif';
+  ctx.fillText(`得分: ${score}    最高: ${bestScore}`, W/2, H/2);
+  ctx.font = '18px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('点击屏幕或按空格键重新开始', W/2, H/2 + 50);
+}
+
+// ----- 游戏逻辑 -----
+function restart() {
+  resetPlatforms();
+  platformIndex = 0;
+  placeHeroOnPlatform(0);
+  score = 0;
+  stickLen = 0; stickAngle = 0;
+  state = STATE.READY;
+  fallY = 0; fallVY = 0;
+  walkProgress = 0;
+  tip.style.display = '';
+}
+
+let platformIndex = 0;
+let lastPlatformTime = 0;
+
+function init() {
+  bestScore = parseInt(localStorage.getItem('bridgeBest') || '0');
+  resetPlatforms();
+  platformIndex = 0;
+  placeHeroOnPlatform(0);
+}
+
+function update(dt) {
+  const current = platforms[platformIndex];
+  const next = platforms[platformIndex + 1];
+  if (!next) return;
+
+  const stickPivotX = current.x + current.w;
+  const stickPivotY = current.y;
+  const targetLand = next.x <= stickPivotX + stickLen && stickPivotX + stickLen <= next.x + next.w;
+
+  switch (state) {
+    case STATE.EXTENDING:
+      stickLen += extendSpeed * dt;
+      if (stickLen > W) stickLen = W;
+      break;
+
+    case STATE.DROPPING:
+      stickAngle += 4 * dt;
+      if (stickAngle >= Math.PI / 2) {
+        stickAngle = Math.PI / 2;
+        if (targetLand) {
+          state = STATE.WALKING;
+          walkProgress = 0;
+        } else {
+          // 杆子太短或太长，小人走过去然后掉落
+          state = STATE.WALKING;
+          walkProgress = 0;
+          heroWalkDir = 1;
+        }
+      }
+      break;
+
+    case STATE.WALKING: {
+      const walkSpeed = 2.2;
+      walkProgress += walkSpeed * dt;
+      if (walkProgress > 1) walkProgress = 1;
+
+      const landX = stickPivotX + stickLen;
+      const walkX = stickPivotX + (landX - stickPivotX) * walkProgress;
+      hero.x = walkX;
+      hero.y = current.y + (stickAngle < 0.1 ? 0 : 0);
+
+      if (walkProgress >= 1) {
+        if (targetLand) {
+          // 成功过桥
+          platformIndex++;
+          placeHeroOnPlatform(platformIndex);
+          score++;
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('bridgeBest', bestScore);
+          }
+          // 生成下一个平台
+          if (platformIndex >= platforms.length - 1) {
+            platforms.push(nextPlatform());
+          }
+          // 平滑移动视角
+          stickLen = 0; stickAngle = 0;
+          state = STATE.READY;
+          tip.style.display = '';
+        } else {
+          // 杆子没搭上，小人掉落
+          state = STATE.FALLING;
+          fallY = hero.y;
+          fallVY = 0;
+        }
+      }
+      break;
+    }
+
+    case STATE.FALLING:
+      fallVY += 600 * dt;
+      fallY += fallVY * dt;
+      if (fallY > H + 100) {
+        state = STATE.GAMEOVER;
+        tip.style.display = '';
+      }
+      break;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  drawSky();
+
+  // 计算相机偏移（跟随当前平台）
+  const current = platforms[platformIndex];
+  const camX = Math.max(0, current.x - 100);
+
+  ctx.save();
+  ctx.translate(-camX, 0);
+
+  // 画远处的山
+  ctx.fillStyle = '#8DB580';
+  for (let i = 0; i < 6; i++) {
+    const mx = i * 250;
+    ctx.beginPath(); ctx.moveTo(mx, 520);
+    ctx.quadraticCurveTo(mx + 80, 400, mx + 160, 520);
+    ctx.fill();
+  }
+
+  // 画平台
+  for (let i = 0; i < platforms.length; i++) {
+    drawPlatform(platforms[i], i === platformIndex + 1 && state === STATE.READY);
+  }
+
+  // 画杆子
+  const pivotX = current.x + current.w;
+  const pivotY = current.y;
+  if (state === STATE.EXTENDING || (state === STATE.DROPPING && stickAngle < Math.PI / 2)) {
+    // 竖直伸展
+    drawStick(pivotX, pivotY, stickLen, -(Math.PI / 2 - stickAngle));
+  } else if (state === STATE.WALKING || state === STATE.FALLING) {
+    // 横着
+    drawStick(pivotX, pivotY, stickLen, 0);
+  }
+
+  // 画小人
+  const hx = hero.x, hy = hero.y;
+  if (state === STATE.FALLING) {
+    drawHero(hx, fallY, '#E74C3C');
+  } else {
+    drawHero(hx, hy, '#3498DB');
+  }
+
+  ctx.restore();
+
+  // 在相机偏移之外画分数字
+  drawScore();
+
+  if (state === STATE.GAMEOVER) drawGameOver();
+}
+
+// ----- 游戏循环 -----
+let lastTime = performance.now();
+
+function loop(time) {
+  let dt = (time - lastTime) / 1000;
+  if (dt > 0.1) dt = 0.016; // 防止切后台回来 dt 过大
+  lastTime = time;
+
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

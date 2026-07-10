@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhan.backdemo.mapper.AnnouncementMapper">
+
+    <resultMap id="AnnouncementMap" type="com.zhan.backdemo.entity.Announcement">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="publisherId" column="publisher_id"/>
+        <result property="publisherName" column="publisher_name"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO announcement (title, content, publisher_id, publisher_name)
+        VALUES (#{title}, #{content}, #{publisherId}, #{publisherName})
+    </insert>
+
+    <select id="listAll" resultMap="AnnouncementMap">
+        SELECT * FROM announcement ORDER BY create_time DESC
+    </select>
+
+    <select id="findById" resultMap="AnnouncementMap">
+        SELECT * FROM announcement WHERE id = #{id}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM announcement WHERE id = #{id}
+    </delete>
+
+</mapper>
