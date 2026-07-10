@@ -1,0 +1,7 @@
+{
+  "name": "community-repair",
+  "private": true,
+  "scripts": {
+    "build": "cd front-demo && npm install && npm run build"
+  }
+}
