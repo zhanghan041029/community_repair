@@ -283,7 +283,7 @@ onMounted(fetchData)
           @current-change="(p) => { query.page = p; fetchData() }"
         />
       </div>
-    </div>
+    </el-card>
   </div>
 </template>
 
